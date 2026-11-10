@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: Olfato
+## Notes: Avisa con puntitos sobre la barra de nombre cuánto te falta para entrar en el rango de aggro de cada bicho.
+## Author: Matias
+## Version: 0.1.0
+## SavedVariables: OlfatoDB
+## IconTexture: Interface\Icons\Ability_Hunter_Pet_Wolf
+
+embeds.xml
+Olfato.lua
