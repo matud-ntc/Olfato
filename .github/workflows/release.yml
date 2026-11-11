@@ -48,4 +48,6 @@ jobs:
           files: dist/Olfato.zip
           generate_release_notes: true
           body: |
-            **Instalación:** descomprimí `Olfato.zip` dentro de `World of Warcraft/_forever_/Interface/AddOns/` (tiene que quedar la carpeta `Olfato` adentro de `AddOns`) y reiniciá el juego.
+            **Bajá `Olfato.zip`** (no los *Source code*, que traen la carpeta con otro nombre).
+
+            Abrí el zip y arrastrá la carpeta `Olfato` a `World of Warcraft/_forever_/Interface/AddOns/`. Tiene que quedar `AddOns/Olfato/Olfato.toc`. Después reiniciá el juego.

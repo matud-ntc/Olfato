@@ -14,10 +14,10 @@ Si no hay peligro, no se ve nada. Al pasar el mouse por un enemigo, el tooltip m
 
 ## Instalar
 
-1. Bajá **[Olfato.zip](https://github.com/matud-ntc/Olfato/releases/latest/download/Olfato.zip)**.
-2. Descomprimilo dentro de la carpeta de addons de Forever:
+1. Bajá **[Olfato.zip](https://github.com/matud-ntc/Olfato/releases/latest/download/Olfato.zip)**. Usá ese link: el botón verde *Code → Download ZIP* y los *Source code* de la página de releases bajan una carpeta con otro nombre (`Olfato-main`, `Olfato-0.1.0`) que el juego no reconoce.
+2. Abrí el zip y arrastrá la carpeta `Olfato` que hay adentro a:
    `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\`
-   Tiene que quedar la carpeta `Olfato` adentro de `AddOns`.
+   Si usás *Extraer todo*, borrá del destino el `\Olfato` que Windows agrega al final; si no, queda `AddOns\Olfato\Olfato` y el juego no lo ve. Tiene que quedar `AddOns\Olfato\Olfato.toc`.
 3. Cerrá y abrí el juego. En la selección de personaje, en **AddOns**, fijate que esté tildado.
 4. Prendé las barras de nombre de enemigos (tecla **V**).
 
