@@ -15,6 +15,8 @@ local COLORS = {
 
 local YD = GetLocale():sub(1, 2) == "es" and " m" or " yd"
 
+local BACKUP_UNITS = { "target", "mouseover", "softenemy" }
+
 local db
 local testing = false
 local units = {}      -- nameplate unit token -> true
@@ -45,7 +47,7 @@ local function Threatens(unit)
   return reaction ~= nil and reaction <= 3 -- yellow (neutral) mobs never start a fight
 end
 
--- Temporary trace (saved on /reload): what each check returned, "S" = secret value.
+-- /olf debug: records what each check returned (saved on /reload), "S" = secret value.
 local traced = {}
 local function V(v)
   if issecretvalue and issecretvalue(v) then return "S" end
@@ -179,12 +181,17 @@ local function Update()
       worst, worstUnit = level, unit
     end
   end
-  -- No nameplate events at all for this mob: at least follow your target.
-  if not seenTarget and UnitExists("target") then
-    local level = DangerLevel("target")
-    if level == 3 and (lastLevel.target or 0) < 3 then alarm = true end
-    lastLevel.target = level
-    if level > worst then worst, worstUnit = level, "target" end
+  -- Backups for mobs the game never reported through a nameplate: whatever you have
+  -- targeted, under the mouse, or soft-targeted. Normally the nameplates cover everything.
+  if not seenTarget then
+    for _, unit in ipairs(BACKUP_UNITS) do
+      if UnitExists(unit) == true then
+        local level = DangerLevel(unit)
+        if level == 3 and (lastLevel[unit] or 0) < 3 then alarm = true end
+        lastLevel[unit] = level
+        if level > worst then worst, worstUnit = level, unit end
+      end
+    end
   end
   ShowHud(worst, worstUnit)
   if alarm and db.sound then PlaySound(SOUNDKIT.TELL_MESSAGE or 3081, "SFX") end
@@ -227,7 +234,7 @@ events:SetScript("OnEvent", function(_, event, arg)
       if OlfatoDB[k] == nil then OlfatoDB[k] = v end
     end
     db = OlfatoDB
-    db.trace = {}
+    db.trace = db.debug and {} or nil
     db.stats = { added = 0, forbidden = 0, ticks = 0 }
   elseif event == "PLAYER_LOGIN" then
     ExtendPlates()
@@ -251,7 +258,20 @@ events:SetScript("OnEvent", function(_, event, arg)
 end)
 
 local function Print(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cffff9933Olfato|r " .. msg)
+  DEFAULT_CHAT_FRAME:AddMessage("|cffff9933Olfato:|r " .. msg)
+end
+
+local function Diagnostics()
+  local n = 0
+  for _ in pairs(units) do n = n + 1 end
+  local line = ("placas a %s yd, %d a la vista (%d normales, %d bloqueadas)"):format(
+    GetCVar("nameplateMaxDistance") or "?", n, db.stats.added, db.stats.forbidden)
+  if UnitExists("target") and Public(UnitCanAttack("player", "target")) then
+    local minR, maxR = RC:GetRange("target")
+    line = line .. ("; target: aggro %d yd, distancia %s-%s yd"):format(
+      AggroRadius("target"), Public(minR) or "?", Public(maxR) or "?")
+  end
+  return line
 end
 
 SLASH_OLFATO1 = "/olf"
@@ -261,9 +281,9 @@ SlashCmdList.OLFATO = function(msg)
   if msg == "on" or msg == "off" then
     db.enabled = msg == "on"
     if not db.enabled then HideAll() end
-    Print(db.enabled and "activado" or "desactivado")
+    Print(db.enabled and "activado." or "desactivado.")
   elseif msg == "prueba" or msg == "test" then
-    -- Shows the three steps, then the alarm sound.
+    -- Plays the three steps and the alarm so you know what to look for.
     testing = true
     for level = 1, 3 do
       C_Timer.After(level - 1, function()
@@ -274,15 +294,13 @@ SlashCmdList.OLFATO = function(msg)
     C_Timer.After(5, function() testing = false; ShowHud(0) end)
   elseif msg == "sonido" or msg == "sound" then
     db.sound = not db.sound
-    Print("sonido " .. (db.sound and "sí" or "no"))
+    Print(db.sound and "va a sonar un aviso cuando un enemigo esté por atacarte." or "sin sonido.")
+  elseif msg == "debug" then
+    db.debug = not db.debug
+    db.trace = db.debug and {} or nil
+    Print(db.debug and ("diagnóstico activado (se guarda con /reload). " .. Diagnostics()) or "diagnóstico desactivado.")
   else
-    local target = UnitExists("target") and Public(UnitCanAttack("player", "target"))
-    local minR, maxR = RC:GetRange("target")
-    local n = 0
-    for _ in pairs(units) do n = n + 1 end
-    Print(("%s · sonido %s · placas hasta %s yd · %d placas (%d normales, %d bloqueadas)%s"):format(
-      db.enabled and "on" or "off", db.sound and "sí" or "no", GetCVar("nameplateMaxDistance") or "?",
-      n, db.stats.added, db.stats.forbidden,
-      target and (" · target: aggro %d yd, estás a %s-%s"):format(AggroRadius("target"), Public(minR) or "?", Public(maxR) or "?") or ""))
+    Print((db.enabled and "activado" or "desactivado") .. (db.sound and ", con sonido." or ", sin sonido."))
+    Print("/olf prueba muestra cómo se ve el aviso · /olf sonido · /olf " .. (db.enabled and "off" or "on"))
   end
 end

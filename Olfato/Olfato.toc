@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Olfato
-## Notes: Avisa con puntitos sobre la barra de nombre cuánto te falta para entrar en el rango de aggro de cada bicho.
+## Notes: Te avisa cuando estás por entrar en el rango de aggro de un enemigo.
 ## Author: Matias
 ## Version: 0.1.0
 ## SavedVariables: OlfatoDB
