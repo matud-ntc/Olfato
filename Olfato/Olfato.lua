@@ -16,6 +16,7 @@ local COLORS = {
 local YD = GetLocale():sub(1, 2) == "es" and " m" or " yd"
 
 local db
+local testing = false
 local units = {}      -- nameplate unit token -> true
 local indicators = {} -- nameplate frame -> indicator
 local lastLevel = {}  -- unit token -> level shown
@@ -44,7 +45,31 @@ local function Threatens(unit)
   return reaction ~= nil and reaction <= 3 -- yellow (neutral) mobs never start a fight
 end
 
+-- Temporary trace (saved on /reload): what each check returned, "S" = secret value.
+local traced = {}
+local function V(v)
+  if issecretvalue and issecretvalue(v) then return "S" end
+  return tostring(v)
+end
+local function Trace(unit)
+  if (traced[unit] or 0) > GetTime() - 1 or UnitIsPlayer(unit) == true then return end
+  traced[unit] = GetTime()
+  local minR, maxR = RC:GetRange(unit)
+  local line = table.concat({
+    date("%H:%M:%S"), unit,
+    "ex=" .. V(UnitExists(unit)), "dead=" .. V(UnitIsDeadOrGhost(unit)), "pl=" .. V(UnitIsPlayer(unit)),
+    "atk=" .. V(UnitCanAttack("player", unit)), "cmb=" .. V(UnitAffectingCombat(unit)),
+    "rea=" .. V(UnitReaction(unit, "player")), "lvl=" .. V(UnitLevel(unit)) .. "/" .. V(UnitLevel("player")),
+    "rng=" .. V(minR) .. "-" .. V(maxR), "harmRC=" .. #(RC.harmRC or {}),
+    "item5=" .. V(C_Item.IsItemInRange(8149, unit)), "int3=" .. V(CheckInteractDistance(unit, 3)),
+  }, " ")
+  local t = db.trace
+  table.insert(t, line)
+  if #t > 120 then table.remove(t, 1) end
+end
+
 local function DangerLevel(unit)
+  if db.trace then pcall(Trace, unit) end
   if not Threatens(unit) then return 0 end
   local minRange, maxRange = RC:GetRange(unit)
   minRange, maxRange = Public(minRange), Public(maxRange)
@@ -110,10 +135,12 @@ local function Show(plate, level)
 end
 
 local function Update()
-  if not db.enabled then return end
+  db.stats.ticks = db.stats.ticks + 1
+  if not db.enabled or testing then return end
   local alarm = false
   for unit in pairs(units) do
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
+    db.stats.plate = plate and "yes" or "nil"
     if plate then
       local level = DangerLevel(unit)
       if level == 3 and (lastLevel[unit] or 0) < 3 then alarm = true end
@@ -159,6 +186,8 @@ events:SetScript("OnEvent", function(_, event, arg)
       if OlfatoDB[k] == nil then OlfatoDB[k] = v end
     end
     db = OlfatoDB
+    db.trace = {}
+    db.stats = { added = 0, ticks = 0 }
   elseif event == "PLAYER_LOGIN" then
     ExtendPlates()
     C_Timer.NewTicker(TICK, Update)
@@ -167,6 +196,7 @@ events:SetScript("OnEvent", function(_, event, arg)
     end
   elseif event == "NAME_PLATE_UNIT_ADDED" then
     units[arg] = true
+    db.stats.added = db.stats.added + 1
   elseif event == "NAME_PLATE_UNIT_REMOVED" then
     units[arg] = nil
     lastLevel[arg] = nil
@@ -187,6 +217,21 @@ SlashCmdList.OLFATO = function(msg)
     db.enabled = msg == "on"
     if not db.enabled then HideAll() end
     Print(db.enabled and "activado" or "desactivado")
+  elseif msg == "prueba" or msg == "test" then
+    -- Shows the three steps on your target's nameplate, then the alarm sound.
+    local plate = C_NamePlate.GetNamePlateForUnit("target")
+    if not plate then
+      Print("poné de target algo con barra de nombre")
+      return
+    end
+    testing = true
+    for level = 1, 3 do
+      C_Timer.After(level - 1, function()
+        Show(plate, level)
+        if level == 3 then PlaySound(SOUNDKIT.TELL_MESSAGE or 3081, "SFX") end
+      end)
+    end
+    C_Timer.After(5, function() testing = false; Show(plate, 0) end)
   elseif msg == "sonido" or msg == "sound" then
     db.sound = not db.sound
     Print("sonido " .. (db.sound and "sí" or "no"))
