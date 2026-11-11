@@ -62,6 +62,7 @@ local function Trace(unit)
     "rea=" .. V(UnitReaction(unit, "player")), "lvl=" .. V(UnitLevel(unit)) .. "/" .. V(UnitLevel("player")),
     "rng=" .. V(minR) .. "-" .. V(maxR), "harmRC=" .. #(RC.harmRC or {}),
     "item5=" .. V(C_Item.IsItemInRange(8149, unit)), "int3=" .. V(CheckInteractDistance(unit, 3)),
+    "plate=" .. (C_NamePlate.GetNamePlateForUnit(unit) and "y" or "n"),
   }, " ")
   local t = db.trace
   table.insert(t, line)
@@ -82,11 +83,9 @@ local function DangerLevel(unit)
   return 0
 end
 
-local function NewIndicator(plate)
-  local f = CreateFrame("Frame", nil, plate)
+local function NewIndicator(parent)
+  local f = CreateFrame("Frame", nil, parent)
   f:SetSize(30, 8)
-  f:SetPoint("BOTTOM", plate, "TOP", 0, -2)
-  f:SetFrameLevel(plate:GetFrameLevel() + 10)
   f.dots = {}
   for i = 1, 3 do
     local dot = f:CreateTexture(nil, "OVERLAY")
@@ -116,8 +115,12 @@ local function Show(plate, level)
     if f then f:Hide(); f.pulse:Stop() end
     return
   end
-  f = f or NewIndicator(plate)
-  indicators[plate] = f
+  if not f then
+    f = NewIndicator(plate)
+    f:SetPoint("BOTTOM", plate, "TOP", 0, -2)
+    f:SetFrameLevel(plate:GetFrameLevel() + 10)
+    indicators[plate] = f
+  end
   local r, g, b = unpack(COLORS[level])
   for i, dot in ipairs(f.dots) do
     if i <= level then
@@ -134,20 +137,56 @@ local function Show(plate, level)
   f:Show()
 end
 
+-- Forever doesn't let addons touch enemy NPC nameplates (they arrive as "forbidden"),
+-- so mobs without a usable plate are summed up in a small indicator under your character.
+local hud
+local function Hud()
+  if hud then return hud end
+  hud = CreateFrame("Frame", "OlfatoHUD", UIParent)
+  hud:SetSize(30, 8)
+  hud:SetPoint("CENTER", UIParent, "CENTER", 0, -110)
+  hud.inner = NewIndicator(hud)
+  hud.inner:SetAllPoints(hud)
+  hud.name = hud:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  hud.name:SetPoint("TOP", hud, "BOTTOM", 0, -2)
+  hud.name:SetTextColor(0.8, 0.8, 0.8)
+  return hud
+end
+
+local function ShowHud(level, unit)
+  local h = Hud()
+  indicators[h] = h.inner
+  Show(h, level)
+  local name = unit and Public(UnitName(unit))
+  h.name:SetText(level > 0 and name or "")
+end
+
 local function Update()
   db.stats.ticks = db.stats.ticks + 1
   if not db.enabled or testing then return end
   local alarm = false
+  local worst, worstUnit = 0, nil
+  local seenTarget = false
   for unit in pairs(units) do
+    local level = DangerLevel(unit)
+    if level == 3 and (lastLevel[unit] or 0) < 3 then alarm = true end
+    lastLevel[unit] = level
+    if UnitIsUnit(unit, "target") == true then seenTarget = true end
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
-    db.stats.plate = plate and "yes" or "nil"
     if plate then
-      local level = DangerLevel(unit)
-      if level == 3 and (lastLevel[unit] or 0) < 3 then alarm = true end
-      lastLevel[unit] = level
       Show(plate, level)
+    elseif level > worst then
+      worst, worstUnit = level, unit
     end
   end
+  -- No nameplate events at all for this mob: at least follow your target.
+  if not seenTarget and UnitExists("target") then
+    local level = DangerLevel("target")
+    if level == 3 and (lastLevel.target or 0) < 3 then alarm = true end
+    lastLevel.target = level
+    if level > worst then worst, worstUnit = level, "target" end
+  end
+  ShowHud(worst, worstUnit)
   if alarm and db.sound then PlaySound(SOUNDKIT.TELL_MESSAGE or 3081, "SFX") end
 end
 
@@ -179,6 +218,8 @@ events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+events:RegisterEvent("FORBIDDEN_NAME_PLATE_UNIT_ADDED")
+events:RegisterEvent("FORBIDDEN_NAME_PLATE_UNIT_REMOVED")
 events:SetScript("OnEvent", function(_, event, arg)
   if event == "ADDON_LOADED" and arg == addonName then
     OlfatoDB = OlfatoDB or {}
@@ -187,17 +228,21 @@ events:SetScript("OnEvent", function(_, event, arg)
     end
     db = OlfatoDB
     db.trace = {}
-    db.stats = { added = 0, ticks = 0 }
+    db.stats = { added = 0, forbidden = 0, ticks = 0 }
   elseif event == "PLAYER_LOGIN" then
     ExtendPlates()
     C_Timer.NewTicker(TICK, Update)
     if TooltipDataProcessor then
       TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, AddTooltipLine)
     end
-  elseif event == "NAME_PLATE_UNIT_ADDED" then
+  elseif event == "NAME_PLATE_UNIT_ADDED" or event == "FORBIDDEN_NAME_PLATE_UNIT_ADDED" then
     units[arg] = true
-    db.stats.added = db.stats.added + 1
-  elseif event == "NAME_PLATE_UNIT_REMOVED" then
+    if event == "NAME_PLATE_UNIT_ADDED" then
+      db.stats.added = db.stats.added + 1
+    else
+      db.stats.forbidden = db.stats.forbidden + 1
+    end
+  elseif event == "NAME_PLATE_UNIT_REMOVED" or event == "FORBIDDEN_NAME_PLATE_UNIT_REMOVED" then
     units[arg] = nil
     lastLevel[arg] = nil
     local plate = C_NamePlate.GetNamePlateForUnit(arg)
@@ -218,28 +263,26 @@ SlashCmdList.OLFATO = function(msg)
     if not db.enabled then HideAll() end
     Print(db.enabled and "activado" or "desactivado")
   elseif msg == "prueba" or msg == "test" then
-    -- Shows the three steps on your target's nameplate, then the alarm sound.
-    local plate = C_NamePlate.GetNamePlateForUnit("target")
-    if not plate then
-      Print("poné de target algo con barra de nombre")
-      return
-    end
+    -- Shows the three steps, then the alarm sound.
     testing = true
     for level = 1, 3 do
       C_Timer.After(level - 1, function()
-        Show(plate, level)
+        ShowHud(level, UnitExists("target") and "target" or "player")
         if level == 3 then PlaySound(SOUNDKIT.TELL_MESSAGE or 3081, "SFX") end
       end)
     end
-    C_Timer.After(5, function() testing = false; Show(plate, 0) end)
+    C_Timer.After(5, function() testing = false; ShowHud(0) end)
   elseif msg == "sonido" or msg == "sound" then
     db.sound = not db.sound
     Print("sonido " .. (db.sound and "sí" or "no"))
   else
     local target = UnitExists("target") and Public(UnitCanAttack("player", "target"))
     local minR, maxR = RC:GetRange("target")
-    Print(("%s · sonido %s · placas hasta %s yd%s"):format(
+    local n = 0
+    for _ in pairs(units) do n = n + 1 end
+    Print(("%s · sonido %s · placas hasta %s yd · %d placas (%d normales, %d bloqueadas)%s"):format(
       db.enabled and "on" or "off", db.sound and "sí" or "no", GetCVar("nameplateMaxDistance") or "?",
+      n, db.stats.added, db.stats.forbidden,
       target and (" · target: aggro %d yd, estás a %s-%s"):format(AggroRadius("target"), Public(minR) or "?", Public(maxR) or "?") or ""))
   end
 end
