@@ -12,6 +12,8 @@ Debajo de tu personaje aparecen hasta tres puntos, junto al nombre del enemigo m
 
 Si no hay peligro, no se ve nada. Al pasar el mouse por un enemigo, el tooltip muestra su radio (`Aggro 18 yd`).
 
+Arriba del retrato de tu objetivo aparece a cuántas yardas está (`20-25`). El juego no les da a los addons la distancia exacta, por eso es una franja.
+
 ## Instalar
 
 1. Bajá **[Olfato.zip](https://github.com/matud-ntc/Olfato/releases/latest/download/Olfato.zip)**. Usá ese link: el botón verde *Code → Download ZIP* y los *Source code* de la página de releases bajan una carpeta con otro nombre (`Olfato-main`, `Olfato-0.1.0`) que el juego no reconoce.
@@ -23,13 +25,20 @@ Si no hay peligro, no se ve nada. Al pasar el mouse por un enemigo, el tooltip m
 
 Para actualizar, repetí los mismos pasos y reemplazá la carpeta.
 
-## Comandos
+## Opciones
+
+`/olf` abre una ventanita para prender y apagar cada cosa: los puntos, la línea del tooltip, el sonido (viene apagado) y la distancia al objetivo. Las mismas opciones están en **Options → AddOns → Olfato**. El botón **Probar** muestra los tres avisos y el sonido, para saber qué buscar.
+
+En **Avisar a** escribís el alcance de un hechizo tuyo (por ejemplo `41`, el Auto Shot de un cazador con Hawk Eye). Si tenés un hechizo con ese alcance exacto, aparece su ícono al lado y Olfato le pregunta a él: la franja se parte en tu número (`40-45` pasa a `40-41` en verde si está a tiro, `41-45` en gris si no). Si no tenés ninguno, se pone verde solo cuando toda la franja entra (`30-35` con `33` queda gris, porque puede estar afuera). Vacío, no avisa.
+
+También hay comandos:
 
 | Comando | Qué hace |
 |---|---|
-| `/olf prueba` | muestra los tres avisos y el sonido, para saber qué buscar |
-| `/olf sonido` | suena un aviso cuando un enemigo pasa a rojo (viene apagado) |
-| `/olf off` · `/olf on` | lo apaga y lo prende |
+| `/olf prueba` | lo mismo que el botón Probar |
+| `/olf sonido` | prende o apaga el sonido cuando un enemigo pasa a rojo |
+| `/olf distancia` | prende o apaga la distancia al objetivo |
+| `/olf off` · `/olf on` | apaga y prende los puntos |
 
 ## Cómo calcula
 
@@ -43,6 +52,8 @@ No tiene en cuenta el sigilo (que achica el radio), los enemigos con un radio es
 ## Para desarrollo
 
 `/olf debug` guarda lo que devuelve cada chequeo en `WTF/.../SavedVariables/Olfato.lua` (se escribe al hacer `/reload`). El cliente de Forever usa el motor 12.x: algunos datos llegan como "valores secretos" y las barras de nombre de los NPC están bloqueadas para los addons, por eso el aviso va debajo del personaje.
+
+`lua test/simular.lua` (también con `es` o `sintemplate`) corre el addon en un WoW simulado: distancia al objetivo, ventana de opciones, panel de Settings, puntos, tooltip y barras. `lua test/cazador.lua` (o con `viejo`, para la API de hechizos anterior a 11.x) prueba **Avisar a** con los disparos de un cazador.
 
 Para publicar una versión: subir `## Version:` en `Olfato/Olfato.toc`, después `git tag vX.Y.Z && git push --tags`. GitHub Actions arma el zip y crea la release.
 

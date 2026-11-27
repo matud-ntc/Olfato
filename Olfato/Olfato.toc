@@ -2,7 +2,7 @@
 ## Title: Olfato
 ## Notes: Te avisa cuando estás por entrar en el rango de aggro de un enemigo.
 ## Author: Matias
-## Version: 0.1.0
+## Version: 0.2.0
 ## SavedVariables: OlfatoDB
 ## IconTexture: Interface\Icons\Ability_Hunter_Pet_Wolf
 
